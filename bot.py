@@ -30,11 +30,19 @@ async def on_message(message):
     if message.author == client.user:
         return
 
+    """
+    If the user enters PREFIX + any phrase within the help_commands list,
+    the bot will send a message with all of its commands and what they do.
+    """
     if message.content.startswith(PREFIX) and message.content[1:].lower() in help_commands:
         commands_response = "Here are a list of my commands:"
         await message.channel.send(commands_response)
 
-    if message.content == PREFIX + 'prefix':
+    """
+    If the user enters PREFIX + 'prefix',
+    the bot allows the user to change the prefix.
+    """
+    if message.content.lower() == PREFIX + 'prefix':
         if message.author.guild_permissions.administrator:
             new_prefix = await change_prefix(message)
             PREFIX = new_prefix

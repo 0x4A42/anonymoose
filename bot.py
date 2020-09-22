@@ -9,7 +9,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 PREFIX = os.getenv('PREFIX_KEY')
 client = commands.Bot(command_prefix=PREFIX)
-allowed_prefix = ["!", "£", "$", "%", "^", "&", "*", "."]
+allowed_prefixes = ["!", "£", "$", "%", "^", "&", "*", "."]
 
 
 @client.command(aliases=['command', 'commands', 'com', 'helpme'])
@@ -44,8 +44,9 @@ async def prefix(ctx):
     new_prefix = await check_new_prefix(ctx, response.content)
     old_prefix = client.command_prefix
     client.command_prefix = new_prefix
+    await change_bot_status()
     if new_prefix is not old_prefix:
-        change_env_var(new_prefix)
+        change_env_prefix(new_prefix)
         await ctx.send("Server prefix has been changed to: " + new_prefix)
 
 
@@ -62,18 +63,18 @@ async def check_new_prefix(ctx, prefix_to_check):
         prefix_to_check: The prefix being checked, if acceptable
         PREFIX: the env variable, if not acceptable
     """
-    if prefix_to_check in allowed_prefix:
+    if prefix_to_check in allowed_prefixes:
         return prefix_to_check
     else:
         allowed_prefix_string = ""
-        for pref in allowed_prefix:
-            allowed_prefix_string += pref + " "
+        for allowed_prefix in allowed_prefixes:
+            allowed_prefix_string += allowed_prefix + " "
         await ctx.send("Sorry, that isn't an acceptable prefix. \nPlease use one of the following: ```" +
                        allowed_prefix_string + "```")
         return str(PREFIX)
 
 
-def change_env_var(new_prefix):
+def change_env_prefix(new_prefix):
     """
     Edits the .env file with the new prefix key so that it is saved even
     when the bot goes offline.
@@ -98,19 +99,26 @@ async def prefix_error(ctx, error):
         await ctx.send("I don't have all day. Try a bit faster next time.")
 
 
-@client.event
-async def on_ready():
+async def change_bot_status():
+    """
+    Sets the status of the bot to show the prefix
+    """
     await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
                                                                                      client.command_prefix))
+
+
+@client.event
+async def on_ready():
+    """
+        Some launch things.
+    """
+    await change_bot_status()
     for guild in client.guilds:
         if guild.name == GUILD:
             break
 
     print(f'{client.user} is connected to the following guild:\n'
           f'{guild.name}(id: {guild.id})')
-
-    members = '\n - '.join([member.name for member in guild.members])
-    print(f'Guild Members:\n - {members}')
 
 
 if __name__ == '__main__':

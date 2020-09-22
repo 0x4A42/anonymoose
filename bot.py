@@ -15,7 +15,7 @@ allowed_prefix = ["!", "£", "$", "%", "^", "&", "*", "."]
 @client.command(aliases=['command', 'commands', 'com', 'helpme'])
 async def show_commands(ctx):
     """
-    If the user enters the prefix + any phrase within the alises,
+    If the user enters the prefix + any phrase within the aliases,
     the bot will send a message with all of its commands and what they do.
     """
     embedVar = discord.Embed(title="Commands", description="This is everything I can do!", color=0x00ff00)
@@ -42,8 +42,9 @@ async def prefix(ctx):
 
     response = await client.wait_for('message', check=check_author, timeout=30)
     new_prefix = await check_new_prefix(ctx, response.content)
+    old_prefix = client.command_prefix
     client.command_prefix = new_prefix
-    if new_prefix is not PREFIX:
+    if new_prefix is not old_prefix:
         change_env_var(new_prefix)
         await ctx.send("Server prefix has been changed to: " + new_prefix)
 
@@ -88,10 +89,10 @@ def change_env_var(new_prefix):
 @prefix.error
 async def prefix_error(ctx, error):
     """
-    Handles the potential TimeoutErorr when asking for a new prefix
+    Handles the potential TimeoutError when asking for a new prefix
     Args:
         ctx: The context, used to determine which channel to write to
-        error: The error that has occured.
+        error: The error that has occurred.
     """
     if isinstance(error, commands.CommandInvokeError):
         await ctx.send("I don't have all day. Try a bit faster next time.")
@@ -99,12 +100,14 @@ async def prefix_error(ctx, error):
 
 @client.event
 async def on_ready():
+    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
+                                                                                     client.command_prefix))
     for guild in client.guilds:
         if guild.name == GUILD:
             break
 
     print(f'{client.user} is connected to the following guild:\n'
-    f'{guild.name}(id: {guild.id})')
+          f'{guild.name}(id: {guild.id})')
 
     members = '\n - '.join([member.name for member in guild.members])
     print(f'Guild Members:\n - {members}')

@@ -8,7 +8,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 PREFIX = os.getenv('PREFIX_KEY')
 client = commands.Bot(command_prefix=PREFIX)
-allowed_prefix = ["!", "£", "$", "%", "^", "&", "*"]
+allowed_prefix = ["!", "£", "$", "%", "^", "&", "*", "."]
 
 
 @client.command(aliases=['command', 'commands', 'com', 'helpme'])
@@ -39,10 +39,41 @@ async def prefix(ctx):
     def check_author(m):
         return m.author == ctx.author and m.channel == ctx.channel
 
-    response = await client.wait_for('message', check=check_author, timeout=10)
-    print(response.content)
+    response = await client.wait_for('message', check=check_author, timeout=30)
+    new_prefix = await check_new_prefix(ctx, response.content)
+    client.command_prefix = new_prefix
+    if new_prefix is not PREFIX:
+        await ctx.send("Server prefix has been changed to: " + new_prefix)
 
 
+async def check_new_prefix(ctx, prefix_to_check):
+    """
+    This function checks the prefix submitted by the user.
+    If it is within a list of allowed prefixes, returns the new prefix.
+    Else, returns the original and sends an error message
+
+    Args:
+        ctx: the context from the message which initiated this.
+        prefix_to_check (string): the prefix being checked
+    Returns:
+        prefix_to_check: The prefix being checked, if acceptable
+        PREFIX: the env variable, if not acceptable
+    """
+    if prefix_to_check in allowed_prefix:
+        return prefix_to_check
+    else:
+        allowed_prefix_string = ""
+        for pref in allowed_prefix:
+            allowed_prefix_string += pref + " "
+        await ctx.send("Sorry, that isn't an acceptable prefix. \nPlease use one of the following: ```" +
+                       allowed_prefix_string + "```")
+        return str(PREFIX)
+
+
+@prefix.error
+async def prefix_error(ctx, error):
+    if isinstance(error, commands.CommandInvokeError):
+        await ctx.send("I don't have all day. Try a bit faster next time.")
 
 #@client.event
 #async def on_message(message, author):
@@ -56,18 +87,8 @@ async def prefix(ctx):
     #return msg.content
 
 
-@client.event
-async def check_new_prefix(prefix_to_check, ctx):
-    print("check")
-    if prefix_to_check.content in allowed_prefix:
-        return prefix_to_check.content
-    else:
-        allowed_prefix_string = ""
-        for prefix in allowed_prefix:
-            allowed_prefix_string += prefix + " "
-        await ctx.send("Sorry, that isn't an acceptable prefix. \nPlease use one of the following: ```" +
-                       allowed_prefix_string + "```")
-        return str(PREFIX)
+
+
 
 
 @client.event

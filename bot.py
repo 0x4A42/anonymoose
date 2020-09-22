@@ -1,6 +1,7 @@
 import os
 import discord
 from discord.ext import commands
+import dotenv
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,7 @@ allowed_prefix = ["!", "£", "$", "%", "^", "&", "*", "."]
 @client.command(aliases=['command', 'commands', 'com', 'helpme'])
 async def show_commands(ctx):
     """
-    If the user enters PREFIX + any phrase within the help_commands list,
+    If the user enters the prefix + any phrase within the alises,
     the bot will send a message with all of its commands and what they do.
     """
     embedVar = discord.Embed(title="Commands", description="This is everything I can do!", color=0x00ff00)
@@ -43,6 +44,7 @@ async def prefix(ctx):
     new_prefix = await check_new_prefix(ctx, response.content)
     client.command_prefix = new_prefix
     if new_prefix is not PREFIX:
+        change_env_var(new_prefix)
         await ctx.send("Server prefix has been changed to: " + new_prefix)
 
 
@@ -70,25 +72,29 @@ async def check_new_prefix(ctx, prefix_to_check):
         return str(PREFIX)
 
 
+def change_env_var(new_prefix):
+    """
+    Edits the .env file with the new prefix key so that it is saved even
+    when the bot goes offline.
+    Args:
+        new_prefix (string): The new prefix to write to file
+    """
+    dotenv_file = dotenv.find_dotenv()
+    dotenv.load_dotenv(dotenv_file)
+    os.environ["PREFIX_KEY"] = new_prefix
+    dotenv.set_key(dotenv_file, "PREFIX_KEY", os.environ["PREFIX_KEY"])
+
+
 @prefix.error
 async def prefix_error(ctx, error):
+    """
+    Handles the potential TimeoutErorr when asking for a new prefix
+    Args:
+        ctx: The context, used to determine which channel to write to
+        error: The error that has occured.
+    """
     if isinstance(error, commands.CommandInvokeError):
         await ctx.send("I don't have all day. Try a bit faster next time.")
-
-#@client.event
-#async def on_message(message, author):
-    #print("get new prefix call)")
-
-    #def check():
-        #return msg.author == author
-
-    #msg = await client.wait_for('message', check=check)
-    #print("before return")
-    #return msg.content
-
-
-
-
 
 
 @client.event
@@ -102,17 +108,6 @@ async def on_ready():
 
     members = '\n - '.join([member.name for member in guild.members])
     print(f'Guild Members:\n - {members}')
-
-
-# async def change_prefix(message, author):
-#
-
-
-# def check(author, message):
-#  if message.author is not author:
-#     return False
-# else:
-#  return True
 
 
 if __name__ == '__main__':

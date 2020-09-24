@@ -30,32 +30,17 @@ async def show_commands(ctx):
     await ctx.send(embed=embedVar)
 
 
-@client.command()
-@commands.has_permissions(administrator=True)
-async def prefix(ctx):
+async def change_prefix(ctx):
     """
         If the user enters PREFIX + 'prefix',
         the bot will try to set a new prefix.
         Requires user to have admin rights.
         """
-    await ctx.send("Please enter a new prefix.")
 
-    def check_author(m):
-        """
-        Checks that the subsequent message is from the same user and in the same channel
-        as the message with the command
 
-        Args:
-            m: the message
 
-        Return:
-            : returns the message if author and channel match
-        """
-        return m.author == ctx.author and m.channel == ctx.channel
-
+    await ctx.channel.send("Please enter a new prefix.")
     response = await client.wait_for('message', check=check_author, timeout=30)
-    print(response)
-    print(response.content)
     new_prefix = await check_new_prefix(ctx, response.content)
     old_prefix = client.command_prefix
     client.command_prefix = new_prefix
@@ -102,7 +87,54 @@ def change_env_prefix(new_prefix):
     dotenv.set_key(dotenv_file, "PREFIX_KEY", os.environ["PREFIX_KEY"])
 
 
-@prefix.error
+
+async def change_bot_status():
+    """
+    Sets the status of the bot to show the prefix
+    """
+    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
+                                                                                     client.command_prefix))
+
+
+@client.command()
+@commands.has_permissions(administrator=True)
+async def setup(ctx):
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    embedVar = discord.Embed(title="Set Up", description="What would you like to edit?", color=0x00ff00)
+    embedVar.add_field(name="Prefix", value="Please press 1.", inline=False)
+    embedVar.add_field(name="Reporting Channel", value="Please press 2.", inline=False)
+    embedVar.add_field(name="Logging Channel", value="Please press 3.", inline=False)
+    embedVar.add_field(name="All of the above", value="Please press 4.", inline=False)
+    await ctx.send(embed=embedVar)
+    response = await client.wait_for('message', timeout=60)
+    if response.content == "1":
+        await ctx.send("Please enter your new prefix.")
+        new_prefix = await client.wait_for('message', check=check_author, timeout=60)
+        await change_prefix(new_prefix)
+    elif response.content == "2":
+        print("reporting channel")
+    elif response.content == "3":
+        print("logging channel")
+    elif response.content == "4":
+        print("all")
+    else:
+        print("not recognised")
+
+
+@setup.error
 async def prefix_error(ctx, error):
     """
     Handles the potential TimeoutError when asking for a new prefix
@@ -113,44 +145,64 @@ async def prefix_error(ctx, error):
     if isinstance(error, commands.CommandInvokeError):
         await ctx.send("I don't have all day. Try a bit faster next time.")
 
-
-async def change_bot_status():
-    """
-    Sets the status of the bot to show the prefix
-    """
-    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
-                                                                                     client.command_prefix))
-
-
-@client.event
-async def on_message(message):
+@client.command(aliases=['report', 'submit', 'rep'])
+async def anonymous_report(ctx):
     """
     This function will be responsible for the additional calling of functions to copy and delete messages, provided
-    that the message is sent in a speific channel and is not sent by the bot (to prevent recursive calls).
+    that the message is sent in a specific channel and is not sent by the bot (to prevent recursive calls).
 
     Args:
-        message: the message sent
+        ctx: the message sent
     """
-    if message.channel.id == 757234289107533867 and message.author != client.user:
-        await copy_message(message)
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    if ctx.channel.id == 757234289107533867 and ctx.author != client.user:
+        await ctx.message.delete()
+        prompt = await ctx.send("Please enter details of your report - including a brief summary, the channel in "
+                                "which it "
+                                "occurred, and the offending user(s).")
+        report_from_user = await client.wait_for('message', check=check_author, timeout=60)
+
+        await copy_message(report_from_user)
+        await report_from_user.delete()
+        await prompt.delete()
+        await report_from_user.channel.send("Thank you for your report - the moderators will look into the issue! "
+                                            ":slight_smile:")
     else:
         pass
 
 
+@anonymous_report.error
+async def prefix_error(ctx, error):
+    """
+    Handles the potential TimeoutError when asking for a user's report
+    Args:
+        ctx: The context, used to determine which channel to write to
+        error: The error that has occurred.
+    """
+    if isinstance(error, commands.CommandInvokeError):
+        await ctx.send("Your time to report has timed out. Please try again.")
+
+
 async def copy_message(msg):
     """
-    This function will copy the message into another channel
+    This function will copy the message and paste it into another channel.
     """
-    print("copy message")
+    channel = client.get_channel(757962643523895335)
     embedVar = discord.Embed(title="Report from " + str(msg.author), description=str(msg.content), color=0x00ff00)
-    await msg.channel.send(embed=embedVar)
-
-
-async def delete_message():
-    """
-    This function will delete the initial message
-    """
-    pass
+    await channel.send(embed=embedVar)
 
 
 @client.event

@@ -1,13 +1,16 @@
-import os
+from config import Config
 import discord
 from discord.ext import commands
 import dotenv
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 PREFIX = os.getenv('PREFIX_KEY')
+INITIAL_CHANNEL = os.getenv('INITIAL_CHANNEL')
+MOVED_CHANNEL = os.getenv('MOVED_CHANNEL')
 client = commands.Bot(command_prefix=PREFIX)
 allowed_prefixes = ["!", "£", "$", "%", "^", "&", "*", "."]
 
@@ -38,9 +41,21 @@ async def prefix(ctx):
     await ctx.send("Please enter a new prefix.")
 
     def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
         return m.author == ctx.author and m.channel == ctx.channel
 
     response = await client.wait_for('message', check=check_author, timeout=30)
+    print(response)
+    print(response.content)
     new_prefix = await check_new_prefix(ctx, response.content)
     old_prefix = client.command_prefix
     client.command_prefix = new_prefix
@@ -105,6 +120,37 @@ async def change_bot_status():
     """
     await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
                                                                                      client.command_prefix))
+
+
+@client.event
+async def on_message(message):
+    """
+    This function will be responsible for the additional calling of functions to copy and delete messages, provided
+    that the message is sent in a speific channel and is not sent by the bot (to prevent recursive calls).
+
+    Args:
+        message: the message sent
+    """
+    if message.channel.id == 757234289107533867 and message.author != client.user:
+        await copy_message(message)
+    else:
+        pass
+
+
+async def copy_message(msg):
+    """
+    This function will copy the message into another channel
+    """
+    print("copy message")
+    embedVar = discord.Embed(title="Report from " + str(msg.author), description=str(msg.content), color=0x00ff00)
+    await msg.channel.send(embed=embedVar)
+
+
+async def delete_message():
+    """
+    This function will delete the initial message
+    """
+    pass
 
 
 @client.event

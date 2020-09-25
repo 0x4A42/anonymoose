@@ -8,3 +8,5 @@
 /httpRequests/
 # env
 ../.env
+# config object 
+../config_value.txt

@@ -1,17 +1,17 @@
 from config import Config
 import discord
 from discord.ext import commands
-import dotenv
 from dotenv import load_dotenv
 import os
+import pickle
 
+CONFIG
+DEFAULT_CHANNEL = 758992353272266784
+config_file_name = 'config_value.txt'
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
-PREFIX = os.getenv('PREFIX_KEY')
-INITIAL_CHANNEL = os.getenv('INITIAL_CHANNEL')
-MOVED_CHANNEL = os.getenv('MOVED_CHANNEL')
-client = commands.Bot(command_prefix=PREFIX)
+client = commands.Bot(command_prefix=CONFIG.prefix)
 allowed_prefixes = ["!", "£", "$", "%", "^", "&", "*", "."]
 
 
@@ -22,32 +22,21 @@ async def show_commands(ctx):
     the bot will send a message with all of its commands and what they do.
     """
     embedVar = discord.Embed(title="Commands", description="This is everything I can do!", color=0x00ff00)
-    embedVar.add_field(name=PREFIX + "help, " + PREFIX + "command, " + PREFIX + "commands", value="Shows a list "
-                                                                                                  "of my "
-                                                                                                  "commands.",
-                       inline=False)
-    embedVar.add_field(name=PREFIX + "prefix", value="Allows an admin to change the prefix.", inline=False)
+    embedVar.add_field(name=CONFIG.prefix + "help, " + CONFIG.prefix + "command, " + CONFIG.prefix + "commands",
+                       value="Shows a list of my commands.", inline=False)
+    embedVar.add_field(name=CONFIG.prefix + "prefix", value="Allows an admin to change the prefix.", inline=False)
     await ctx.send(embed=embedVar)
 
 
-async def change_prefix(ctx):
-    """
-        If the user enters PREFIX + 'prefix',
-        the bot will try to set a new prefix.
-        Requires user to have admin rights.
-        """
+# async def change_prefix(ctx):
+# """
+#    If the user enters PREFIX + 'prefix',
+#     the bot will try to set a new prefix.
+#    Requires user to have admin rights.
+# """
 
-
-
-    await ctx.channel.send("Please enter a new prefix.")
-    response = await client.wait_for('message', check=check_author, timeout=30)
-    new_prefix = await check_new_prefix(ctx, response.content)
-    old_prefix = client.command_prefix
-    client.command_prefix = new_prefix
-    await change_bot_status()
-    if new_prefix is not old_prefix:
-        change_env_prefix(new_prefix)
-        await ctx.send("Server prefix has been changed to: " + new_prefix)
+# await ctx.channel.send("Please enter a new prefix.")
+# response = await client.wait_for('message', timeout=30)
 
 
 async def check_new_prefix(ctx, prefix_to_check):
@@ -71,34 +60,13 @@ async def check_new_prefix(ctx, prefix_to_check):
             allowed_prefix_string += allowed_prefix + " "
         await ctx.send("Sorry, that isn't an acceptable prefix. \nPlease use one of the following: ```" +
                        allowed_prefix_string + "```")
-        return str(PREFIX)
+        return str(CONFIG.prefix)
 
 
-def change_env_prefix(new_prefix):
-    """
-    Edits the .env file with the new prefix key so that it is saved even
-    when the bot goes offline.
-    Args:
-        new_prefix (string): The new prefix to write to file
-    """
-    dotenv_file = dotenv.find_dotenv()
-    dotenv.load_dotenv(dotenv_file)
-    os.environ["PREFIX_KEY"] = new_prefix
-    dotenv.set_key(dotenv_file, "PREFIX_KEY", os.environ["PREFIX_KEY"])
-
-
-
-async def change_bot_status():
-    """
-    Sets the status of the bot to show the prefix
-    """
-    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
-                                                                                     client.command_prefix))
-
-
-@client.command()
+@client.command(aliases=['change', 'edit', 'prefix', 'adjust'])
 @commands.has_permissions(administrator=True)
-async def setup(ctx):
+async def change_values(ctx):
+    global CONFIG
 
     def check_author(m):
         """
@@ -120,22 +88,38 @@ async def setup(ctx):
     embedVar.add_field(name="All of the above", value="Please press 4.", inline=False)
     await ctx.send(embed=embedVar)
     response = await client.wait_for('message', timeout=60)
+
     if response.content == "1":
         await ctx.send("Please enter your new prefix.")
-        new_prefix = await client.wait_for('message', check=check_author, timeout=60)
-        await change_prefix(new_prefix)
+        response = await client.wait_for('message', check=check_author, timeout=60)
+        new_prefix = await check_new_prefix(ctx, response.content)
+        old_prefix = client.command_prefix
+        client.command_prefix = new_prefix
+        await change_bot_status()
+        if new_prefix is not old_prefix:
+            await ctx.send("Server prefix has been changed to: " + new_prefix)
     elif response.content == "2":
         print("reporting channel")
     elif response.content == "3":
         print("logging channel")
     elif response.content == "4":
-        print("all")
+        edit_all = discord.Embed(title="Edit All", description="Please enter your new prefix, reporting channel ID "
+                                                               "and logging channel ID", color=0x00ff00)
+        edit_all.add_field(name="Example", value="$ 100 101", inline=False)
+        await ctx.send(embed=edit_all)
+        new_prefix, new_reporting_channel, new_logging_channel = await client.wait_for('message', check=check_author,
+                                                                                       timeout=60)
+        CONFIG = Config(new_prefix, new_reporting_channel, new_logging_channel)
+        pickle.dump(CONFIG, config_file_name, )
     else:
         print("not recognised")
 
+    with open(config_file_name, "wb") as pickle_file:
+        pickle.dump(CONFIG, pickle_file)
 
-@setup.error
-async def prefix_error(ctx, error):
+
+@change_values.error
+async def change_values_error(ctx, error):
     """
     Handles the potential TimeoutError when asking for a new prefix
     Args:
@@ -144,6 +128,7 @@ async def prefix_error(ctx, error):
     """
     if isinstance(error, commands.CommandInvokeError):
         await ctx.send("I don't have all day. Try a bit faster next time.")
+
 
 @client.command(aliases=['report', 'submit', 'rep'])
 async def anonymous_report(ctx):
@@ -185,7 +170,7 @@ async def anonymous_report(ctx):
 
 
 @anonymous_report.error
-async def prefix_error(ctx, error):
+async def anonymous_report_error(ctx, error):
     """
     Handles the potential TimeoutError when asking for a user's report
     Args:
@@ -205,11 +190,66 @@ async def copy_message(msg):
     await channel.send(embed=embedVar)
 
 
+async def change_bot_status():
+    """
+    Sets the status of the bot to show the prefix
+    """
+    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
+                                                                                     client.command_prefix))
+
+
+async def setup():
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author.guild_permissions.administrator and m.channel == channel
+
+    global CONFIG
+    channel = client.get_channel(DEFAULT_CHANNEL)
+    set_up = discord.Embed(title="Initial Set Up", description="Please enter your new prefix, reporting channel ID "
+                                                               "and logging channel ID. Failure to do this correctly "
+                                                               "will lead to the bot not working."
+                                                               "\n\nIf you make a mistake, you can call the change"
+                                                               "command with your prefix + change. ",
+                           color=0x00ff00)
+    set_up.add_field(name="Example", value="$ 100 101", inline=False)
+    await channel.send(embed=set_up)
+    try:
+        response = await client.wait_for('message', check=check_author)
+        initial_prefix, initial_reporting_channel, initial_logging_channel = str.split(response.content)
+        CONFIG = Config(initial_prefix, initial_reporting_channel, initial_logging_channel)
+        await channel.send("Your prefix has been set to: " + initial_prefix +
+                           "The channel users will report in is: " + initial_reporting_channel
+                           + "The channel the reports will be copied to is: " + initial_logging_channel)
+        with open(config_file_name, "wb") as pickle_file:
+            pickle.dump(CONFIG, pickle_file)
+    except ValueError:
+        await channel.send("You must submit three (3) values separated by spaces. Try again.")
+
+
 @client.event
 async def on_ready():
     """
         Some launch things.
     """
+    global CONFIG  # ensures this function uses the global variable
+
+    if os.path.exists(config_file_name):
+        pass
+    else:
+        while not os.path.exists(config_file_name):
+            await setup()
+
+    with open(config_file_name, 'rb') as pickle_file:
+        CONFIG = pickle.load(pickle_file)
     await change_bot_status()
     for guild in client.guilds:
         if guild.name == GUILD:

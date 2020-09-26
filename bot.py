@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 import os
 import pickle
 
-CONFIG
+CONFIG = Config("$", 0, 0)
 DEFAULT_CHANNEL = 758992353272266784
-config_file_name = 'config_value.txt'
+config_file_name = 'config_value.pickle'
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
@@ -26,17 +26,6 @@ async def show_commands(ctx):
                        value="Shows a list of my commands.", inline=False)
     embedVar.add_field(name=CONFIG.prefix + "prefix", value="Allows an admin to change the prefix.", inline=False)
     await ctx.send(embed=embedVar)
-
-
-# async def change_prefix(ctx):
-# """
-#    If the user enters PREFIX + 'prefix',
-#     the bot will try to set a new prefix.
-#    Requires user to have admin rights.
-# """
-
-# await ctx.channel.send("Please enter a new prefix.")
-# response = await client.wait_for('message', timeout=30)
 
 
 async def check_new_prefix(ctx, prefix_to_check):
@@ -63,7 +52,146 @@ async def check_new_prefix(ctx, prefix_to_check):
         return str(CONFIG.prefix)
 
 
-@client.command(aliases=['change', 'edit', 'prefix', 'adjust'])
+async def change_prefix(ctx):
+    """
+    This function will deal with changing the prefix of this bot.
+
+    Args:
+        ctx: the message initially sent to trigger this change.
+    """
+    global CONFIG
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    await ctx.send("Please enter your new prefix.")
+    response = await client.wait_for('message', check=check_author, timeout=60)
+    new_prefix = await check_new_prefix(ctx, response.content)
+    if new_prefix is not client.command_prefix:
+        if new_prefix in allowed_prefixes:
+            CONFIG.prefix = new_prefix
+            client.command_prefix = new_prefix
+            await change_bot_status()
+            await ctx.send("Server prefix has been changed to: " + new_prefix)
+
+
+async def change_reporting_channel(ctx):
+    """
+    This function will deal with changing the reporting channel where users submit reports.
+
+    Args:
+        ctx: the message initially sent to trigger this change.
+    """
+    global CONFIG
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    await ctx.send("Please enter the name of your user reporting channel.")
+    channel = await client.wait_for('message', check=check_author, timeout=60)
+    try:
+        new_report_channel = discord.utils.get(ctx.guild.channels, name=channel.content)
+        CONFIG.initial_channel = new_report_channel.id
+        await ctx.send("Your user reporting channel has been changed to: " + new_report_channel.mention)
+    except AttributeError:
+        await ctx.send("Cannot find a channel with the name of " + channel.content)
+
+
+async def change_logging_channel(ctx):
+    """
+    This function will deal with changing the logging channel where reports are copied into.
+
+    Args:
+        ctx: the message initially sent to trigger this change.
+    """
+    global CONFIG
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    await ctx.send("Please enter the name of your report logging channel.")
+    channel = await client.wait_for('message', check=check_author, timeout=60)
+    try:
+        new_log_channel = discord.utils.get(ctx.guild.channels, name=channel.content)
+        CONFIG.moved_channel = new_log_channel.id
+        await ctx.send("Your reporting logging channel has been changed to: " + new_log_channel.mention)
+    except AttributeError:
+        await ctx.send("Cannot find a channel with the name of " + channel.content)
+
+
+async def change_all_variables(ctx):
+    """
+    This function will deal with changing all three variables at once.
+    This will change the prefix, the reporting channel and the logging channel.
+
+    Args:
+         ctx: the message initially sent to trigger this change.
+    """
+    global CONFIG
+
+    def check_author(m):
+        """
+        Checks that the subsequent message is from the same user and in the same channel
+        as the message with the command
+
+        Args:
+            m: the message
+
+        Return:
+            : returns the message if author and channel match
+        """
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    edit_all = discord.Embed(title="Edit All", description="Please enter your new prefix, the name of the channel "
+                                                           "users will report in and the name of your report "
+                                                           "logging channel", color=0x00ff00)
+    edit_all.add_field(name="Example", value="$ reports report_logs", inline=False)
+    await ctx.send(embed=edit_all)
+    try:
+        response = await client.wait_for('message', check=check_author, timeout=60)
+        new_prefix, new_reporting_channel, new_logging_channel = str.split(response.content)
+        new_report_channel = discord.utils.get(ctx.guild.channels, name=new_reporting_channel)
+        new_log_channel = discord.utils.get(ctx.guild.channels, name=new_logging_channel)
+        client.command_prefix = new_prefix
+        CONFIG = Config(new_prefix, new_report_channel.id, new_log_channel.id)
+        await change_bot_status()
+    except ValueError:
+        await ctx.send("You must submit three (3) values separated by spaces.")
+    except TimeoutError:
+        await ctx.send("You took too long. Request cancelled.")
+
+
+@client.command(aliases=['change', 'edit', 'prefix', 'adjust', 'config', 'channels'])
 @commands.has_permissions(administrator=True)
 async def change_values(ctx):
     global CONFIG
@@ -81,7 +209,7 @@ async def change_values(ctx):
         """
         return m.author == ctx.author and m.channel == ctx.channel
 
-    embedVar = discord.Embed(title="Set Up", description="What would you like to edit?", color=0x00ff00)
+    embedVar = discord.Embed(title="Configuration", description="What would you like to edit?", color=0x00ff00)
     embedVar.add_field(name="Prefix", value="Please press 1.", inline=False)
     embedVar.add_field(name="Reporting Channel", value="Please press 2.", inline=False)
     embedVar.add_field(name="Logging Channel", value="Please press 3.", inline=False)
@@ -90,44 +218,15 @@ async def change_values(ctx):
     response = await client.wait_for('message', timeout=60)
 
     if response.content == "1":
-        await ctx.send("Please enter your new prefix.")
-        response = await client.wait_for('message', check=check_author, timeout=60)
-        new_prefix = await check_new_prefix(ctx, response.content)
-        old_prefix = client.command_prefix
-        client.command_prefix = new_prefix
-        await change_bot_status()
-        if new_prefix is not old_prefix:
-            await ctx.send("Server prefix has been changed to: " + new_prefix)
+        await change_prefix(ctx)
     elif response.content == "2":
-        print("reporting channel")
+        await change_reporting_channel(ctx)
     elif response.content == "3":
-        print("logging channel")
+        await change_logging_channel(ctx)
     elif response.content == "4":
-        edit_all = discord.Embed(title="Edit All", description="Please enter your new prefix, reporting channel ID "
-                                                               "and logging channel ID", color=0x00ff00)
-        edit_all.add_field(name="Example", value="$ 100 101", inline=False)
-        await ctx.send(embed=edit_all)
-        new_prefix, new_reporting_channel, new_logging_channel = await client.wait_for('message', check=check_author,
-                                                                                       timeout=60)
-        CONFIG = Config(new_prefix, new_reporting_channel, new_logging_channel)
-        pickle.dump(CONFIG, config_file_name, )
-    else:
-        print("not recognised")
+        await change_all_variables(ctx)
 
-    with open(config_file_name, "wb") as pickle_file:
-        pickle.dump(CONFIG, pickle_file)
-
-
-@change_values.error
-async def change_values_error(ctx, error):
-    """
-    Handles the potential TimeoutError when asking for a new prefix
-    Args:
-        ctx: The context, used to determine which channel to write to
-        error: The error that has occurred.
-    """
-    if isinstance(error, commands.CommandInvokeError):
-        await ctx.send("I don't have all day. Try a bit faster next time.")
+    pickle.dump(CONFIG, open(config_file_name, "wb"))  # Saves changes to file, no matter what was changed
 
 
 @client.command(aliases=['report', 'submit', 'rep'])
@@ -153,7 +252,9 @@ async def anonymous_report(ctx):
         """
         return m.author == ctx.author and m.channel == ctx.channel
 
-    if ctx.channel.id == 757234289107533867 and ctx.author != client.user:
+    print(ctx.channel.id)
+    print(CONFIG.initial_channel)
+    if ctx.channel.id == CONFIG.initial_channel and ctx.author != client.user:
         await ctx.message.delete()
         prompt = await ctx.send("Please enter details of your report - including a brief summary, the channel in "
                                 "which it "
@@ -185,7 +286,8 @@ async def copy_message(msg):
     """
     This function will copy the message and paste it into another channel.
     """
-    channel = client.get_channel(757962643523895335)
+    channel = client.get_channel(CONFIG.moved_channel)
+    print(channel)
     embedVar = discord.Embed(title="Report from " + str(msg.author), description=str(msg.content), color=0x00ff00)
     await channel.send(embed=embedVar)
 
@@ -214,7 +316,7 @@ async def setup():
 
     global CONFIG
     channel = client.get_channel(DEFAULT_CHANNEL)
-    set_up = discord.Embed(title="Initial Set Up", description="Please enter your new prefix, reporting channel ID "
+    set_up = discord.Embed(title="Initial Set Up", description="Please enter your prefix, reporting channel ID "
                                                                "and logging channel ID. Failure to do this correctly "
                                                                "will lead to the bot not working."
                                                                "\n\nIf you make a mistake, you can call the change"
@@ -232,7 +334,7 @@ async def setup():
         with open(config_file_name, "wb") as pickle_file:
             pickle.dump(CONFIG, pickle_file)
     except ValueError:
-        await channel.send("You must submit three (3) values separated by spaces. Try again.")
+        await channel.send("You must submit three (3) values separated by spaces.")
 
 
 @client.event
@@ -250,6 +352,8 @@ async def on_ready():
 
     with open(config_file_name, 'rb') as pickle_file:
         CONFIG = pickle.load(pickle_file)
+        client.command_prefix = CONFIG.prefix
+
     await change_bot_status()
     for guild in client.guilds:
         if guild.name == GUILD:

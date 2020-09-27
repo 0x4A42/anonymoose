@@ -2,8 +2,12 @@ from config import Config
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+import object_pickling
 import os
-import pickle
+import prefix
+import reporting
+import status_and_errors
+
 
 CONFIG = Config("$", 0, 0)
 config_file_name = 'config_value.pickle'
@@ -79,8 +83,8 @@ async def change_prefix(ctx):
     if new_prefix is not client.command_prefix:
         if new_prefix in allowed_prefixes:
             CONFIG.prefix = new_prefix
-            client.command_prefix = new_prefix
-            await change_bot_status()
+            prefix.change_bot_prefix(new_prefix, client)
+            await status_and_errors.change_bot_status(client)
             await ctx.send("Server prefix has been changed to: " + new_prefix)
 
 
@@ -176,14 +180,22 @@ async def change_all_variables(ctx):
         new_prefix, new_reporting_channel, new_logging_channel = str.split(response.content)
         new_report_channel = discord.utils.get(ctx.guild.channels, name=new_reporting_channel)
         new_log_channel = discord.utils.get(ctx.guild.channels, name=new_logging_channel)
-        client.command_prefix = new_prefix
+        prefix.change_bot_prefix(new_prefix, client)
         CONFIG = Config(new_prefix, new_report_channel.id, new_log_channel.id)
-        await change_bot_status()
-        save_pickle()
+        await status_and_errors.change_bot_status(client)
+        object_pickling.save_pickle(config_file_name, CONFIG)
     except ValueError:
-        await ctx.send("You must submit three (3) values separated by spaces.")
+        edit_all = discord.Embed(title="Error - Too many arguments.",
+                                 description="You must submit three (3) values separated by spaces.",
+                                 color=0xFF0000)
+        edit_all.add_field(name="Example", value="$ reports report_logs", inline=False)
+        await ctx.send(embed=edit_all)
     except TimeoutError:
-        await ctx.send("You took too long. Request cancelled.")
+        edit_all = discord.Embed(title="Error - Timeout.",
+                                 description="You took too long. Please try again, submitting your desired prefix and "
+                                             "channels within 60 seconds.",
+                                 color=0xFF0000)
+        await ctx.send(embed=edit_all)
 
 
 @client.command(aliases=['change', 'edit', 'prefix', 'adjust', 'config', 'channels'])
@@ -191,7 +203,7 @@ async def change_all_variables(ctx):
 async def change_values(ctx):
     global CONFIG
     if CONFIG.initial_channel == 0 or CONFIG.moved_channel == 0:
-        await ctx.send("It seems like you haven't set me up yet. Please use " + CONFIG.prefix + "setup to do so.")
+        await status_and_errors.set_up_not_complete_error(ctx, CONFIG.prefix)
     else:
         embedVar = discord.Embed(title="Configuration", description="What would you like to edit?", color=0xFFA500)
         embedVar.add_field(name="Prefix", value="Please press 1.", inline=False)
@@ -209,14 +221,14 @@ async def change_values(ctx):
             await change_logging_channel(ctx)
         elif response.content == "4":
             edit_all = discord.Embed(title="Edit All",
-                                     description="Please enter your new prefix, the name of the channel "
-                                                 "users will report in and the name of your report "
-                                                 "logging channel", color=0xFFA500)
+                                     description="Please enter your new prefix, the name of the channel users will "
+                                                 "report in and the name of your report logging channel",
+                                     color=0xFFA500)
             edit_all.add_field(name="Example", value="$ reports report_logs", inline=False)
             await ctx.send(embed=edit_all)
             await change_all_variables(ctx)
 
-        save_pickle()  # Saves changes to file
+        object_pickling.save_pickle(config_file_name, CONFIG)  # Saves changes to file
 
 
 @client.command(aliases=['report', 'submit', 'rep'])
@@ -243,7 +255,7 @@ async def anonymous_report(ctx):
         return m.author == ctx.author and m.channel == ctx.channel
 
     if CONFIG.initial_channel == 0 or CONFIG.moved_channel == 0:
-        await ctx.send("It seems like you haven't set me up yet. Please use " + CONFIG.prefix + "setup to do so.")
+        await status_and_errors.set_up_not_complete_error(ctx, CONFIG.prefix)
     else:
         if ctx.channel.id == CONFIG.initial_channel and ctx.author != client.user:
             await ctx.message.delete()
@@ -252,7 +264,7 @@ async def anonymous_report(ctx):
                                     "occurred, and the offending user(s).")
             report_from_user = await client.wait_for('message', check=check_author, timeout=60)
 
-            await copy_message(report_from_user)
+            await reporting.copy_message(report_from_user, CONFIG, client)
             await report_from_user.delete()
             await prompt.delete()
             await report_from_user.channel.send("Thank you for your report - the moderators will look into the issue! "
@@ -271,42 +283,11 @@ async def anonymous_report_error(ctx, error):
         await ctx.send("Your time to report has timed out. Please try again.")
 
 
-async def copy_message(msg):
-    """
-    This function will copy the message and paste it into another channel.
-    """
-    channel = client.get_channel(CONFIG.moved_channel)
-    print(channel)
-    embedVar = discord.Embed(title="Report from " + str(msg.author), description=str(msg.content), color=0x008080)
-    await channel.send(embed=embedVar)
-
-
-async def change_bot_status():
-    """
-    Sets the status of the bot to show the prefix
-    """
-    await client.change_presence(status=discord.Status.online, activity=discord.Game('My prefix is ' +
-                                                                                     client.command_prefix))
-
-
 @client.command()
 async def setup(ctx):
     """
     Called to run the start up process.
     """
-
-    def check_author(m):
-        """
-        Checks that the subsequent message is from the same user and in the same channel
-        as the message with the command
-
-        Args:
-            m: the message
-
-        Return:
-            : returns the message if author and channel match
-        """
-        return m.author.guild_permissions.administrator and m.channel == ctx.channel
 
     global CONFIG
     set_up = discord.Embed(title="Initial Set Up", description="Please enter your desired prefix, the name of the "
@@ -327,24 +308,10 @@ async def on_ready():
     global CONFIG  # ensures this function uses the global variable
 
     if os.path.exists(config_file_name):
-        load_pickle()
+        CONFIG = object_pickling.load_pickle(config_file_name)
+        prefix.change_bot_prefix(CONFIG.prefix, client)
 
-    await change_bot_status()
-
-
-def save_pickle():
-    global CONFIG
-    pickle.dump(CONFIG, open(config_file_name, "wb"))
-
-
-def load_pickle():
-    """
-    Loads the pickle file in, which contains the CONFIG object.
-    """
-    global CONFIG
-    with open(config_file_name, 'rb') as pickle_file:
-        CONFIG = pickle.load(pickle_file)
-        client.command_prefix = CONFIG.prefix
+    await status_and_errors.change_bot_status(client)
 
 
 if __name__ == '__main__':

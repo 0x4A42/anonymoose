@@ -76,7 +76,7 @@ async def check_new_prefix(ctx, prefix_to_check, config, allowed_prefixes):
         return str(config.prefix)
 
 
-async def change_all_variables(ctx, client, config, config_file_name):
+async def change_all_variables(ctx, client, config, config_file_name, allowed_prefixes):
     """
     This function will deal with changing all three variables at once.
     This will change the prefix, the reporting channel and the logging channel.
@@ -86,6 +86,7 @@ async def change_all_variables(ctx, client, config, config_file_name):
          client: the bot
          config: the Config object used by the bot
          config_file_name: the name of the pickle file
+         allowed_prefixes: a list of allowed prefixes
     """
 
     def check_author(m):
@@ -106,23 +107,27 @@ async def change_all_variables(ctx, client, config, config_file_name):
         new_prefix, new_reporting_channel, new_logging_channel = str.split(response.content)
         new_report_channel = discord.utils.get(ctx.guild.channels, name=new_reporting_channel)
         new_log_channel = discord.utils.get(ctx.guild.channels, name=new_logging_channel)
-        change_bot_prefix(new_prefix, client)
-        config = Config(new_prefix, new_report_channel.id, new_log_channel.id)
+        new_prefix_final = await check_new_prefix(ctx, new_prefix, config, allowed_prefixes)
+        change_bot_prefix(new_prefix_final, client)
+        config = Config(new_prefix_final, new_report_channel.id, new_log_channel.id)
         await status_and_errors.change_bot_status(client)
         object_pickling.save_pickle(config_file_name, config)
         return config
     except ValueError:
-        edit_all = discord.Embed(title="Error - Too many arguments.",
+        edit_all = discord.Embed(title="Error: Number of arguments.",
                                  description="You must submit three (3) values separated by spaces.",
                                  color=0xFF0000)
         edit_all.add_field(name="Example", value="$ reports report_logs", inline=False)
         await ctx.send(embed=edit_all)
     except TimeoutError:
-        edit_all = discord.Embed(title="Error - Timeout.",
+        edit_all = discord.Embed(title="Error: Timeout.",
                                  description="You took too long. Please try again, submitting your desired prefix and "
                                              "channels within 60 seconds.",
                                  color=0xFF0000)
         await ctx.send(embed=edit_all)
+    except AttributeError:
+        await ctx.send("Error with one of your channel names. Either **" + new_reporting_channel + "** or **"
+                       + new_logging_channel + "** does not exist.")
 
 
 async def change_reporting_channel(ctx, client, config):
@@ -156,7 +161,7 @@ async def change_reporting_channel(ctx, client, config):
         await ctx.send("Your user reporting channel has been changed to: " + new_report_channel.mention)
         return config
     except AttributeError:
-        await ctx.send("Cannot find a channel with the name of " + channel.content)
+        await status_and_errors.cannot_find_channel_error(ctx, channel.content)
 
 
 async def change_logging_channel(ctx, client, config):
@@ -190,4 +195,4 @@ async def change_logging_channel(ctx, client, config):
         await ctx.send("Your reporting logging channel has been changed to: " + new_log_channel.mention)
         return config
     except AttributeError:
-        await ctx.send("Cannot find a channel with the name of " + channel.content)
+        await status_and_errors.cannot_find_channel_error(ctx, channel.content)

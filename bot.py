@@ -8,7 +8,6 @@ import os
 import reporting
 import status_and_errors
 
-
 CONFIG = Config("$", 0, 0)
 config_file_name = 'config_value.pickle'
 load_dotenv()
@@ -24,17 +23,38 @@ async def show_commands(ctx):
     If the user enters the prefix + any phrase within the aliases,
     the bot will send a message with all of its commands and what they do.
     """
-    embedVar = discord.Embed(title="Commands", description="This is everything I can do!", color=0x00ff00)
-    embedVar.add_field(name=CONFIG.prefix + "help, " + CONFIG.prefix + "command, " + CONFIG.prefix + "commands",
-                       value="Shows a list of my commands.", inline=False)
-    embedVar.add_field(name=CONFIG.prefix + "prefix", value="Allows an admin to change the prefix.", inline=False)
-    await ctx.send(embed=embedVar)
+    if CONFIG.initial_channel == 0 or CONFIG.moved_channel == 0:
+        await status_and_errors.set_up_not_complete_error(ctx, CONFIG.prefix)
+    else:
+        report_channel = discord.utils.get(ctx.guild.channels, id=CONFIG.initial_channel)
+        embedVar = discord.Embed(title="Commands", description="This is everything I can do!", color=0x00ff00)
+        embedVar.add_field(name=CONFIG.prefix + "helpme, " + CONFIG.prefix + "command, " + CONFIG.prefix + "commands, "
+                           + CONFIG.prefix + "com", value="Shows a list of my commands (what you're reading what now!)"
+                                                          ".",
+                           inline=False)
+        embedVar.add_field(name=CONFIG.prefix + "report, " + CONFIG.prefix + "submit, " + CONFIG.prefix + "rep",
+                           value="Allows a user to anonymously submit a report to the moderators within "
+                                 + report_channel.mention + ".", inline=False)
+        embedVar.add_field(name=CONFIG.prefix + "setup",
+                           value="Allows an admin to initially configure things like my prefix and the reporting "
+                                 "channel.", inline=False)
+        embedVar.add_field(name=CONFIG.prefix + "prefix, " + CONFIG.prefix + "change, " + CONFIG.prefix + "edit, "
+                           + CONFIG.prefix + "adjust, " + CONFIG.prefix + "channels, " + CONFIG.prefix + "config",
+                           value="Allows an admin to change the prefix.", inline=False)
+        await ctx.send(embed=embedVar)
 
 
 @client.command(aliases=['change', 'edit', 'prefix', 'adjust', 'config', 'channels'])
 @commands.has_permissions(administrator=True)
 async def change_values(ctx):
+    """
+    Allows an admin to change values within the Config object, such as prefix, reporting channel
+    and the logging channel.
+    Args:
+     ctx: the message with the command, calling this function
+    """
     global CONFIG
+    global allowed_prefixes
     if CONFIG.initial_channel == 0 or CONFIG.moved_channel == 0:
         await status_and_errors.set_up_not_complete_error(ctx, CONFIG.prefix)
     else:
@@ -59,7 +79,8 @@ async def change_values(ctx):
                                      color=0xFFA500)
             edit_all.add_field(name="Example", value="$ reports report_logs", inline=False)
             await ctx.send(embed=edit_all)
-            CONFIG = await change_config_values.change_all_variables(ctx, client, CONFIG, config_file_name)
+            CONFIG = await change_config_values.change_all_variables(ctx, client, CONFIG, config_file_name,
+                                                                     allowed_prefixes)
 
         object_pickling.save_pickle(config_file_name, CONFIG)  # Saves changes to file
 
@@ -128,7 +149,7 @@ async def setup(ctx):
                                                                "report logging channel", color=0xFFA500)
     set_up.add_field(name="Example ", value="$ reports report_logging", inline=False)
     await ctx.send(embed=set_up)
-    CONFIG = await change_config_values.change_all_variables(ctx, client, CONFIG, config_file_name)
+    CONFIG = await change_config_values.change_all_variables(ctx, client, CONFIG, config_file_name, allowed_prefixes)
 
 
 @client.event

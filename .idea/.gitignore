@@ -9,4 +9,4 @@
 # env
 ../.env
 # config object 
-../config_value.txt
+../config_value.pickle

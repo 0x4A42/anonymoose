@@ -5,10 +5,10 @@ This assumes you already have Python installed and know how to use the command l
 
 # Dependencies
 Use pip to install:
->discord
->dotenv
->os
->pickle
+>discord  
+>dotenv  
+>os  
+>pickle  
 
 # Getting Started
 1. Download the code and extract it.

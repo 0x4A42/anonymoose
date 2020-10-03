@@ -125,18 +125,6 @@ async def anonymous_report(ctx):
                                                 ":slight_smile:")
 
 
-@anonymous_report.error
-async def anonymous_report_error(ctx, error):
-    """
-    Handles the potential TimeoutError when asking for a user's report
-    Args:
-        ctx: The context, used to determine which channel to write to
-        error: The error that has occurred.
-    """
-    if isinstance(error, commands.CommandInvokeError):
-        await ctx.send("Your time to report has timed out. Please try again.")
-
-
 @client.command()
 async def setup(ctx):
     """
